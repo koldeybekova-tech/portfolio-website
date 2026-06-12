@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Symbat's playful product design portfolio with case studies, career notes, talks, and a custom paper-plane cursor."
+    />
+    <title>Symbat | Product Design Portfolio</title>
+    <link rel="stylesheet" href="styles.css?v=jessa-inspired-3" />
+  </head>
+  <body>
+    <div class="plane-cursor" aria-hidden="true">
+      <svg viewBox="0 0 92 78" focusable="false">
+        <defs>
+          <linearGradient id="cursor-pink-gradient" x1="18" x2="78" y1="14" y2="58" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#ffe0ee" />
+            <stop offset="0.55" stop-color="#f2a5c6" />
+            <stop offset="1" stop-color="#d878aa" />
+          </linearGradient>
+          <linearGradient id="cursor-wing-shadow" x1="42" x2="75" y1="38" y2="64" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#e28ab7" />
+            <stop offset="1" stop-color="#b9578d" />
+          </linearGradient>
+        </defs>
+        <path class="plane-trail" d="M18 52c-9 10-3 20 12 18 12-2 21-9 34-12" />
+        <path class="plane-body" d="M6 32 84 4 66 55 43 46 31 68 27 40Z" />
+        <path class="plane-wing-light" d="M6 32 84 4 27 40Z" />
+        <path class="plane-wing-shadow" d="M43 46 31 68 35 43Z" />
+        <path class="plane-fold" d="M27 40 84 4 35 43" />
+        <path class="plane-ridge" d="M35 43 66 55" />
+        <path class="plane-dash" d="M34 42v7M39 41v6M44 39v5" />
+      </svg>
+    </div>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Symbat home">
+        <img src="assets/symbat-cat.jpeg" alt="" />
+      </a>
+
+      <nav class="nav" aria-label="Main navigation">
+        <a href="#work">work</a>
+        <a href="#about">about</a>
+        <a href="#talks">talks</a>
+        <a href="#contact">contact</a>
+      </nav>
+
+      <div class="socials" aria-label="Social links">
+        <a href="https://www.instagram.com/" aria-label="Instagram">ig</a>
+        <a href="https://www.linkedin.com/" aria-label="LinkedIn">in</a>
+        <a href="https://github.com/" aria-label="GitHub">gh</a>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy reveal">
+          <h1 id="hero-title">Hi, I’m Symbat.</h1>
+          <p class="hero-subtitle">
+            I design thoughtful digital experiences, build expressive websites, and chase ideas worth making real.
+          </p>
+          <a class="button primary" href="#work">View Work <span aria-hidden="true">→</span></a>
+        </div>
+
+        <div class="hero-stage reveal" aria-label="Symbat illustrated workspace">
+          <div class="blob blob-pink"></div>
+          <div class="blob blob-blue"></div>
+          <div class="hero-image hero-media" aria-label="Playful animation of a designer working on a laptop with a cat">
+            <video class="hero-video" autoplay loop muted playsinline poster="assets/hero-symbat-reference.jpeg">
+              <source src="assets/hero-leda-animation.mp4" type="video/mp4" />
+            </video>
+            <img class="hero-layer hero-layer-flowers" src="assets/hero-layers/hero-flowers-cutout.png" alt="" />
+            <img class="hero-layer hero-layer-plane" src="assets/hero-layers/hero-plane-cutout.png" alt="" />
+          </div>
+          <div class="status-card">
+            <span>currently designing @</span>
+            <strong>Symbat Studio</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="section work" id="work" aria-labelledby="work-title">
+        <div class="section-title reveal">
+          <h2 id="work-title">Case Studies & Work</h2>
+        </div>
+
+        <div class="case-grid">
+          <a class="case-card feature reveal" href="#about">
+            <span>Case Study · Portfolio</span>
+            <h3>Designing a personal portfolio that feels warm, clear, and memorable.</h3>
+          </a>
+          <a class="case-card reveal" href="#about">
+            <span>Case Study · Product Strategy</span>
+            <h3>Turning early ideas into a simple plan for what to build next.</h3>
+          </a>
+          <a class="case-card reveal" href="#about">
+            <span>Case Study · Service Design</span>
+            <h3>Connecting research, sketches, and interface decisions.</h3>
+          </a>
+          <a class="case-card wide reveal" href="#about">
+            <span>AI × Product · UX leadership</span>
+            <h3>AI can speed up output. It still needs human taste, agreement, and direction.</h3>
+            <em>Case Study · Leadership</em>
+          </a>
+          <a class="case-card reveal" href="#about">
+            <span>UX Design · App Design</span>
+            <h3>Designing a calmer, more obvious mobile task flow.</h3>
+          </a>
+          <a class="case-card reveal" href="#about">
+            <span>Product Design · Prototype</span>
+            <h3>A quieter place to read, collect, and return to notes.</h3>
+          </a>
+          <a class="case-card reveal" href="#about">
+            <span>Website · Branding</span>
+            <h3>Building a soft, playful brand system for the web.</h3>
+          </a>
+          <a class="case-card wide reveal" href="#about">
+            <span>Design Systems · Governance</span>
+            <h3>Make it look like one designer made it.</h3>
+            <em>Case Study · Systems</em>
+          </a>
+          <a class="case-card reveal" href="#about">
+            <span>Frontend · Interaction</span>
+            <h3>Small motion details that make a page feel alive.</h3>
+          </a>
+        </div>
+      </section>
+
+      <section class="section about" id="about" aria-labelledby="about-title">
+        <div class="about-collage reveal">
+          <img class="about-photo" src="assets/hero-workspace.png" alt="Illustrated creative workspace" />
+          <img class="about-badge" src="assets/symbat-cat.jpeg" alt="" />
+          <span>Symbat & her favorite little mascot</span>
+        </div>
+        <div class="about-copy reveal">
+          <h2 id="about-title">
+            Hi, I’m Symbat — a curious, detail-loving designer learning to make the web feel kinder.
+          </h2>
+          <p>
+            I’m building a practice around clear interfaces, playful visual systems, and thoughtful front-end craft.
+            I like references that have personality, then reshaping them into something that feels like me.
+          </p>
+          <p>
+            My favorite work sits between design and implementation: naming the idea, making the layout readable, and
+            polishing the small interactions until the page feels intentional.
+          </p>
+          <a class="button ghost" href="#experience">Learn about how I work <span aria-hidden="true">→</span></a>
+        </div>
+      </section>
+
+      <section class="section career" id="experience" aria-labelledby="career-title">
+        <div class="section-title reveal">
+          <h2 id="career-title">Career Overview</h2>
+        </div>
+
+        <div class="career-list">
+          <article class="career-item reveal">
+            <time>2026 – Present</time>
+            <div>
+              <p>Portfolio Studio</p>
+              <h3>Web Design & Frontend Learner</h3>
+              <ul>
+                <li>Built a personal portfolio system from visual references and custom assets</li>
+                <li>Practiced responsive layouts, spacing, interaction states, and design storytelling</li>
+                <li>Shipped a static site with GSAP reveals and a custom cursor experience</li>
+              </ul>
+              <span>Portfolio · Web · Visual Design</span>
+            </div>
+          </article>
+          <article class="career-item reveal">
+            <time>2025 – 2026</time>
+            <div>
+              <p>Creative Practice</p>
+              <h3>Interface Design Explorer</h3>
+              <ul>
+                <li>Studied landing pages, portfolio systems, typography, and expressive art direction</li>
+                <li>Turned rough ideas into UI sections, cards, timelines, and contact flows</li>
+                <li>Developed a warmer design voice with clear content hierarchy</li>
+              </ul>
+              <span>UX · Branding · Prototyping</span>
+            </div>
+          </article>
+          <article class="career-item reveal">
+            <time>2024 – 2025</time>
+            <div>
+              <p>Learning & Experiments</p>
+              <h3>Design Systems Student</h3>
+              <ul>
+                <li>Collected references and translated them into reusable visual rules</li>
+                <li>Practiced accessibility-minded structure and mobile-friendly layouts</li>
+                <li>Learned how details like cursor, hover, and motion change the mood of a page</li>
+              </ul>
+              <span>Systems · HTML · CSS</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="specializing" aria-label="Specializing in">
+        <p>Specializing in</p>
+        <div class="marquee">
+          <div class="marquee-track">
+            <span>collaboration</span>
+            <span>problem solving</span>
+            <span>design thinking</span>
+            <span>research</span>
+            <span>building & shipping products</span>
+            <span>systems thinking</span>
+            <span>storytelling</span>
+            <span>visual design</span>
+            <span>accessibility</span>
+          </div>
+          <div class="marquee-track" aria-hidden="true">
+            <span>collaboration</span>
+            <span>problem solving</span>
+            <span>design thinking</span>
+            <span>research</span>
+            <span>building & shipping products</span>
+            <span>systems thinking</span>
+            <span>storytelling</span>
+            <span>visual design</span>
+            <span>accessibility</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section talks" id="talks" aria-labelledby="talks-title">
+        <div class="section-title reveal">
+          <h2 id="talks-title">Talks for Designers</h2>
+        </div>
+        <div class="talk-grid">
+          <a class="talk-card reveal" href="#contact">
+            <span>01</span>
+            <h3>Intro to design thinking</h3>
+          </a>
+          <a class="talk-card reveal" href="#contact">
+            <span>02</span>
+            <h3>The power of narrative in portfolio work</h3>
+          </a>
+          <a class="talk-card reveal" href="#contact">
+            <span>03</span>
+            <h3>Building confidence as a beginner designer</h3>
+          </a>
+        </div>
+      </section>
+
+      <section class="section contact" id="contact" aria-labelledby="contact-title">
+        <div class="contact-intro reveal">
+          <p>Now playing — Contact</p>
+          <h2 id="contact-title">Say hello</h2>
+          <span>Have a project, a question, or just want to say hi? Drop me a note and I’ll get back to you.</span>
+        </div>
+        <form class="contact-form reveal" action="mailto:hello@example.com" method="post" enctype="text/plain">
+          <label>
+            <span>Name</span>
+            <input name="name" autocomplete="name" />
+          </label>
+          <label>
+            <span>Email</span>
+            <input name="email" type="email" autocomplete="email" />
+          </label>
+          <label>
+            <span>Phone optional</span>
+            <input name="phone" type="tel" autocomplete="tel" />
+          </label>
+          <label>
+            <span>Message</span>
+            <textarea name="message" rows="5"></textarea>
+          </label>
+          <button class="button primary" type="submit">Send it <span aria-hidden="true">→</span></button>
+        </form>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Symbat · All Rights Reserved © 2026</span>
+      <span>hello@example.com</span>
+      <a href="#top">back to top ↑</a>
+    </footer>
+
+    <script src="assets/gsap.min.js"></script>
+    <script src="script.js?v=jessa-inspired-3"></script>
+  </body>
+</html>
