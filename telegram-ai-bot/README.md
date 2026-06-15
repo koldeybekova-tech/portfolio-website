@@ -1,0 +1,224 @@
+# Telegram AI Bot
+
+A simple Telegram bot that replies with Groq.
+
+It also includes a safe task/connector layer:
+
+- `/task` creates a plan, but does not execute anything.
+- `/do` executes safe built-in actions after approval.
+- `/remember` saves important facts for the current chat.
+- `/memory` shows saved memory.
+- `/history` shows recent chat context.
+- Auto-memory saves obvious project facts from normal messages.
+- `/todo`, `/todos`, `/done`, `/undone`, and `/delete` manage chat tasks.
+- `/run connector_name task` queues work for an allowed external server.
+- `/approve action_id` is required before the bot calls that server.
+- connectors must be explicitly allowlisted in `.env`.
+
+## Setup
+
+1. Copy `.env.example` to `.env`.
+2. Add your BotFather token:
+
+```env
+TELEGRAM_BOT_TOKEN=...
+```
+
+3. Add your Groq API key:
+
+```env
+GROQ_API_KEY=...
+```
+
+4. Run:
+
+```bash
+npm start
+```
+
+If `npm` is not available on your Mac, you can run the bot with the bundled Node runtime:
+
+```bash
+/Users/ainaz/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node index.js
+```
+
+## Railway Deploy
+
+Use these settings when creating the Railway service:
+
+- Repository: `koldeybekova-tech/portfolio-website`
+- Root directory: `telegram-ai-bot`
+- Start command: `node index.js`
+
+Add these variables in Railway:
+
+```env
+TELEGRAM_BOT_TOKEN=...
+GROQ_API_KEY=...
+GROQ_MODEL=llama-3.1-8b-instant
+BOT_NAME=Symbat AI
+SYSTEM_PROMPT=You are a helpful, warm Telegram assistant. Answer clearly and briefly.
+AUTO_MEMORY=true
+CONNECTORS_JSON=[]
+```
+
+Do not upload `.env` to GitHub. It is ignored by `.gitignore`.
+
+## Group Chat
+
+In BotFather:
+
+```text
+/mybots -> your bot -> Bot Settings -> Group Privacy -> Turn off
+```
+
+Then add the bot to your group chat.
+
+In a group, the bot answers when:
+
+- you tag it, for example `@your_bot hello`
+- or you write `/ask your question`
+- or you start the message with `бот,`
+
+In private chat, it answers every message.
+
+## Natural Language
+
+You do not always need `/` commands. In private chat, the bot understands normal messages. In group chats, tag the bot or start with `бот,`.
+
+Examples:
+
+```text
+запомни, что мой домен bysymbat.com
+добавь задачу проверить DNS
+покажи задачи
+удали задачу TASK_ID
+переведи на английский: сайт готов
+сделай чеклист запуск портфолио
+какие идеи для портфолио?
+```
+
+Natural execution phrases such as `переведи`, `сделай чеклист`, or `напиши текст` still create an approval step before the bot runs the action.
+
+## Commands
+
+```text
+/help
+/whoami
+/ask explain something
+/remember my portfolio domain is bysymbat.com
+/memory
+/history
+/forget MEMORY_ID
+/todo update the portfolio hero video
+/todos
+/done TASK_ID
+/undone TASK_ID
+/delete TASK_ID
+/task plan this work safely
+/do draft write a polite reply
+/do summarize pasted long text
+/do translate translate this to English
+/do checklist prepare launch steps
+/do note remember this for later
+/connectors
+/run connector_name do this task
+/approve ACTION_ID
+/reject ACTION_ID
+```
+
+## Built-in Execution
+
+The bot can execute these safe built-in actions:
+
+- `draft` - writes a message, email, post, or other text
+- `summarize` - summarizes long text
+- `translate` - translates text
+- `checklist` - turns a task into clear action items
+- `note` - saves a local note in `data/notes.jsonl`
+
+Every `/do` action creates a pending action first. It only runs after:
+
+```text
+/approve ACTION_ID
+```
+
+This keeps the bot useful without letting it silently do things.
+
+## Memory
+
+The bot stores memory locally in:
+
+```text
+data/memory.json
+```
+
+Recent chat context is stored in:
+
+```text
+data/history.jsonl
+```
+
+Tasks are stored in:
+
+```text
+data/tasks.json
+```
+
+Both files are ignored by git through `.gitignore`, so private chat context is not committed.
+
+Useful commands:
+
+```text
+/remember remember that my portfolio is on GitHub
+/memory
+/history
+/forget MEMORY_ID
+/forget all
+```
+
+Auto-memory is enabled by default:
+
+```env
+AUTO_MEMORY=true
+```
+
+It tries to save only useful facts, such as project names, domains, GitHub links, preferences, and portfolio context. It skips messages that look like tokens, API keys, passwords, or secrets.
+
+To turn auto-memory off:
+
+```env
+AUTO_MEMORY=false
+```
+
+## Tasks
+
+Useful commands:
+
+```text
+/todo publish the portfolio on bysymbat.com
+/todos
+/done TASK_ID
+/undone TASK_ID
+/delete TASK_ID
+```
+
+Open tasks are also included as context when the bot answers.
+
+## Safe Connectors
+
+To let the bot call another server, add it to `.env`:
+
+```env
+CONNECTORS_JSON=[{"name":"nora","url":"https://example.com/telegram-task","token":"secret","requiresApproval":true}]
+```
+
+The bot will not call unknown URLs. It only calls named connectors from this allowlist.
+
+To restrict approvals to specific Telegram accounts, first run `/whoami`, then add:
+
+```env
+APPROVER_USER_IDS=123456789
+```
+
+If `APPROVER_USER_IDS` is empty, only the person who requested an action can approve it.
