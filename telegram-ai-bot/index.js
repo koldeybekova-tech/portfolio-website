@@ -236,6 +236,16 @@ async function handleMessage(message) {
     return;
   }
 
+  if (routed?.type === "approveLast") {
+    await approveLatestAction(message);
+    return;
+  }
+
+  if (routed?.type === "rejectLast") {
+    await rejectLatestAction(message);
+    return;
+  }
+
   if (routed?.type === "tool") {
     await runToolFromParts(message, routed.toolName, routed.input);
     return;
@@ -490,6 +500,12 @@ async function runToolFromParts(message, toolName, input) {
 async function approveAction(message, text) {
   const chatId = message.chat.id;
   const id = text.replace(/^\/approve(@\w+)?/i, "").trim();
+
+  if (!id || id.toLowerCase() === "last" || id.toLowerCase() === "latest") {
+    await approveLatestAction(message);
+    return;
+  }
+
   const action = pendingActions.get(id);
 
   if (!action) {
@@ -518,6 +534,12 @@ async function approveAction(message, text) {
 async function rejectAction(message, text) {
   const chatId = message.chat.id;
   const id = text.replace(/^\/reject(@\w+)?/i, "").trim();
+
+  if (!id || id.toLowerCase() === "last" || id.toLowerCase() === "latest") {
+    await rejectLatestAction(message);
+    return;
+  }
+
   const action = pendingActions.get(id);
 
   if (!action) {
@@ -532,6 +554,50 @@ async function rejectAction(message, text) {
 
   pendingActions.delete(id);
   await sendMessage(chatId, `Rejected action ${id}.`);
+}
+
+async function approveLatestAction(message) {
+  const action = await findLatestApprovableAction(message);
+  if (!action) return;
+  await approveAction(message, `/approve ${action.id}`);
+}
+
+async function rejectLatestAction(message) {
+  const action = await findLatestApprovableAction(message);
+  if (!action) return;
+  await rejectAction(message, `/reject ${action.id}`);
+}
+
+async function findLatestApprovableAction(message) {
+  const chatId = message.chat.id;
+  const userId = message.from?.id;
+  const actions = [...pendingActions.values()]
+    .filter((action) => String(action.chatId) === String(chatId))
+    .filter((action) => canApprove(userId, action))
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+  if (!actions.length) {
+    await sendMessage(chatId, "I do not see any pending action you can approve in this chat.");
+    return null;
+  }
+
+  if (actions.length > 1) {
+    await sendMessage(
+      chatId,
+      [
+        "There is more than one pending action. Please choose one by id:",
+        "",
+        ...actions
+          .slice(0, 5)
+          .map((action) => `- ${action.id}: ${action.actionName || action.connectorName || action.type}`),
+        "",
+        "Example: /approve ACTION_ID",
+      ].join("\n")
+    );
+    return null;
+  }
+
+  return actions[0];
 }
 
 async function executeConnectorAction(action) {
@@ -1350,6 +1416,30 @@ function routeNaturalMessage(text, options = {}) {
     return { type: "todos" };
   }
 
+  if (
+    lower === "подтверждаю" ||
+    lower === "да, подтверждаю" ||
+    lower === "да подтверждаю" ||
+    lower === "можно выполнить" ||
+    lower === "выполняй" ||
+    lower === "approve" ||
+    lower === "approve last" ||
+    lower === "confirm" ||
+    lower === "confirm last"
+  ) {
+    return { type: "approveLast" };
+  }
+
+  if (
+    lower === "отмени действие" ||
+    lower === "не подтверждаю" ||
+    lower === "reject" ||
+    lower === "reject last" ||
+    lower === "cancel action"
+  ) {
+    return { type: "rejectLast" };
+  }
+
   const toolRoutes = [
     {
       toolName: "dns",
@@ -1490,7 +1580,9 @@ function helpText() {
     "/connectors - show allowed external servers",
     "/run connector_name task - request work through a connector",
     "/approve action_id - approve external work",
+    "/approve last - approve the latest action you can approve",
     "/reject action_id - reject external work",
+    "/reject last - reject the latest action you can reject",
     "/whoami - show your Telegram user id",
     "",
     "Natural phrases also work:",
@@ -1501,6 +1593,8 @@ function helpText() {
     "проверь домен bysymbat.com",
     "проверь сайт https://bysymbat.com",
     "проверь github koldeybekova-tech/portfolio-website",
+    "да, подтверждаю",
+    "отмени действие",
     "переведи на английский: сайт готов",
     "",
     "In private chats, normal messages are questions.",
@@ -1547,7 +1641,8 @@ function actionsText() {
     "/act cloudflare-a bysymbat.com | @ | 76.76.21.21 | false",
     "/act railway-deploy redeploy bot after config change",
     "",
-    "Every action first returns an action id. It only runs after /approve ACTION_ID.",
+    "Every action first returns an action id. It only runs after approval.",
+    "You can approve with /approve ACTION_ID, /approve last, or 'да, подтверждаю'.",
     "",
     "Required Railway variables:",
     "GITHUB_TOKEN for GitHub issues",

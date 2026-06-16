@@ -116,6 +116,18 @@ Examples:
 
 Natural execution phrases such as `переведи`, `сделай чеклист`, or `напиши текст` still create an approval step before the bot runs the action.
 
+For the latest pending action in the same chat, you can approve or reject without copying the id:
+
+```text
+/approve last
+да, подтверждаю
+подтверждаю
+/reject last
+отмени действие
+```
+
+If there is more than one pending action, the bot will ask you to choose the exact id.
+
 ## Commands
 
 ```text
@@ -149,7 +161,9 @@ Natural execution phrases such as `переведи`, `сделай чеклис
 /connectors
 /run connector_name do this task
 /approve ACTION_ID
+/approve last
 /reject ACTION_ID
+/reject last
 ```
 
 ## Built-in Tools
@@ -182,6 +196,13 @@ These tools can change external accounts, so they always create a pending action
 
 ```text
 /approve ACTION_ID
+```
+
+For the newest pending action in the same chat, you can also use:
+
+```text
+/approve last
+да, подтверждаю
 ```
 
 Available tools:
