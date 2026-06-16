@@ -12,6 +12,10 @@ const SYSTEM_PROMPT =
 const APPROVER_USER_IDS = parseCsv(process.env.APPROVER_USER_IDS);
 const CONNECTORS = parseConnectors(process.env.CONNECTORS_JSON);
 const AUTO_MEMORY = process.env.AUTO_MEMORY !== "false";
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
+const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN || "";
+const CLOUDFLARE_ZONE_ID = process.env.CLOUDFLARE_ZONE_ID || "";
+const RAILWAY_DEPLOY_HOOK_URL = process.env.RAILWAY_DEPLOY_HOOK_URL || "";
 const DATA_DIR = "data";
 const MEMORY_FILE = `${DATA_DIR}/memory.json`;
 const HISTORY_FILE = `${DATA_DIR}/history.jsonl`;
@@ -97,6 +101,8 @@ async function handleMessage(message) {
     text.startsWith("/task") ||
     text.startsWith("/tools") ||
     text.startsWith("/tool") ||
+    text.startsWith("/actions") ||
+    text.startsWith("/act") ||
     text.startsWith("/do") ||
     text.startsWith("/connectors") ||
     text.startsWith("/run") ||
@@ -193,6 +199,16 @@ async function handleMessage(message) {
 
   if (text.startsWith("/tool")) {
     await toolCommand(message, text);
+    return;
+  }
+
+  if (text.startsWith("/actions")) {
+    await sendMessage(chatId, actionsText());
+    return;
+  }
+
+  if (text.startsWith("/act")) {
+    await queueWriteToolAction(message, text);
     return;
   }
 
@@ -491,6 +507,11 @@ async function approveAction(message, text) {
     return;
   }
 
+  if (action.type === "writeTool") {
+    await executeWriteToolAction(action);
+    return;
+  }
+
   await executeConnectorAction(action);
 }
 
@@ -570,6 +591,274 @@ async function executeBuiltinAction(action) {
   } catch (error) {
     await sendMessage(action.chatId, `Built-in action failed for ${action.id}: ${error.message}`);
   }
+}
+
+async function queueWriteToolAction(message, text) {
+  const chatId = message.chat.id;
+  const match = text.match(/^\/act(?:@\w+)?\s+([a-zA-Z0-9_-]+)\s*([\s\S]*)/);
+
+  if (!match) {
+    await sendMessage(chatId, actionsText());
+    return;
+  }
+
+  const [, actionNameRaw, rawInput] = match;
+  const actionName = actionNameRaw.toLowerCase();
+  const allowed = ["github-issue", "cloudflare-cname", "cloudflare-a", "railway-deploy"];
+
+  if (!allowed.includes(actionName)) {
+    await sendMessage(chatId, actionsText());
+    return;
+  }
+
+  const input = rawInput.trim();
+  if (!input && actionName !== "railway-deploy") {
+    await sendMessage(chatId, actionsText());
+    return;
+  }
+
+  const action = {
+    id: createActionId(),
+    type: "writeTool",
+    actionName,
+    input,
+    chatId,
+    requestedBy: message.from?.id,
+    requestedByName: message.from?.username || message.from?.first_name || "unknown",
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    action.preview = previewWriteToolAction(action);
+  } catch (error) {
+    await sendMessage(chatId, `I cannot queue that action yet: ${error.message}\n\n${actionsText()}`);
+    return;
+  }
+
+  pendingActions.set(action.id, action);
+
+  await sendMessage(
+    chatId,
+    [
+      "Approval required before I change an external service.",
+      "",
+      `Action id: ${action.id}`,
+      `Action: ${action.actionName}`,
+      action.preview,
+      "",
+      `Approve: /approve ${action.id}`,
+      `Reject: /reject ${action.id}`,
+    ].join("\n")
+  );
+}
+
+function previewWriteToolAction(action) {
+  if (action.actionName === "github-issue") {
+    const { repo, title } = parseGitHubIssueInput(action.input);
+    return [`GitHub repo: ${repo}`, `Issue title: ${title}`].join("\n");
+  }
+
+  if (action.actionName === "cloudflare-cname" || action.actionName === "cloudflare-a") {
+    const parsed = parseCloudflareDnsInput(action);
+    return [
+      `Zone: ${parsed.zone}`,
+      `Record: ${parsed.type} ${parsed.fullName}`,
+      `Target: ${parsed.content}`,
+      `Proxied: ${parsed.proxied ? "true" : "false"}`,
+    ].join("\n");
+  }
+
+  if (action.actionName === "railway-deploy") {
+    return `Railway deploy hook: ${action.input || "manual redeploy"}`;
+  }
+
+  throw new Error("Unknown action.");
+}
+
+async function executeWriteToolAction(action) {
+  try {
+    let result = "";
+
+    if (action.actionName === "github-issue") {
+      result = await createGitHubIssueAction(action);
+    } else if (action.actionName === "cloudflare-cname" || action.actionName === "cloudflare-a") {
+      result = await upsertCloudflareDnsAction(action);
+    } else if (action.actionName === "railway-deploy") {
+      result = await triggerRailwayDeployHookAction(action);
+    } else {
+      throw new Error(`Unknown write action: ${action.actionName}`);
+    }
+
+    pendingActions.delete(action.id);
+    await sendMessage(action.chatId, `Done: ${action.actionName}\n\n${result}`);
+  } catch (error) {
+    await sendMessage(action.chatId, `Write action failed for ${action.id}: ${error.message}`);
+  }
+}
+
+async function createGitHubIssueAction(action) {
+  if (!GITHUB_TOKEN) {
+    throw new Error("Missing GITHUB_TOKEN in Railway variables.");
+  }
+
+  const { repo, title, body } = parseGitHubIssueInput(action.input);
+  const response = await fetch(`https://api.github.com/repos/${repo}/issues`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+      "User-Agent": `${BOT_NAME.replace(/\s+/g, "-")}/1.0`,
+    },
+    body: JSON.stringify({ title, body }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || `GitHub returned ${response.status}`);
+  }
+
+  return `Created issue: ${data.html_url || `${repo}#${data.number || ""}`}`;
+}
+
+async function upsertCloudflareDnsAction(action) {
+  if (!CLOUDFLARE_API_TOKEN) {
+    throw new Error("Missing CLOUDFLARE_API_TOKEN in Railway variables.");
+  }
+
+  const parsed = parseCloudflareDnsInput(action);
+  const zoneId = await getCloudflareZoneId(parsed.zone);
+  const query = new URLSearchParams({
+    type: parsed.type,
+    name: parsed.fullName,
+  });
+  const existing = await cloudflareRequest(
+    `/zones/${zoneId}/dns_records?${query.toString()}`
+  );
+  const found = Array.isArray(existing.result) ? existing.result[0] : null;
+  const payload = {
+    type: parsed.type,
+    name: parsed.fullName,
+    content: parsed.content,
+    proxied: parsed.proxied,
+  };
+
+  const result = found
+    ? await cloudflareRequest(`/zones/${zoneId}/dns_records/${found.id}`, "PUT", payload)
+    : await cloudflareRequest(`/zones/${zoneId}/dns_records`, "POST", payload);
+
+  const record = result.result || payload;
+  return [
+    `${found ? "Updated" : "Created"} Cloudflare DNS record.`,
+    `${record.type || parsed.type} ${record.name || parsed.fullName} -> ${record.content || parsed.content}`,
+    `Proxied: ${record.proxied ? "true" : "false"}`,
+  ].join("\n");
+}
+
+async function triggerRailwayDeployHookAction() {
+  if (!RAILWAY_DEPLOY_HOOK_URL) {
+    throw new Error(
+      "Missing RAILWAY_DEPLOY_HOOK_URL in Railway variables. Create a Deploy Hook in Railway and add it first."
+    );
+  }
+
+  const response = await fetch(RAILWAY_DEPLOY_HOOK_URL, {
+    method: "POST",
+    signal: AbortSignal.timeout(15000),
+  });
+  const body = await response.text();
+
+  if (!response.ok) {
+    throw new Error(body || `Railway deploy hook returned ${response.status}`);
+  }
+
+  return body ? `Railway deploy hook accepted the request.\n${body.slice(0, 800)}` : "Railway deploy hook accepted the request.";
+}
+
+function parseGitHubIssueInput(input) {
+  const parts = parsePipeArgs(input);
+  if (parts.length < 2) {
+    throw new Error("Use: /act github-issue owner/repo | title | body");
+  }
+
+  return {
+    repo: parseGitHubRepo(parts[0]),
+    title: parts[1],
+    body: parts[2] || `Created by ${BOT_NAME} after Telegram approval.`,
+  };
+}
+
+function parseCloudflareDnsInput(action) {
+  const parts = parsePipeArgs(action.input);
+  if (parts.length < 3) {
+    throw new Error(
+      `Use: /act ${action.actionName} bysymbat.com | @ or www | target | false`
+    );
+  }
+
+  const zone = normalizeDomain(parts[0]);
+  const shortName = parts[1].trim();
+  const content = parts[2].trim();
+  const proxied = String(parts[3] || "false").trim().toLowerCase() === "true";
+  const type = action.actionName === "cloudflare-a" ? "A" : "CNAME";
+  const fullName = fullDnsName(shortName, zone);
+
+  if (!content) throw new Error("DNS target cannot be empty.");
+  if (type === "A" && !/^\d{1,3}(\.\d{1,3}){3}$/.test(content)) {
+    throw new Error("A record target must be an IPv4 address.");
+  }
+
+  return { zone, type, fullName, content, proxied };
+}
+
+function fullDnsName(name, zone) {
+  const clean = String(name).trim().toLowerCase().replace(/\.$/, "");
+  if (!clean || clean === "@") return zone;
+  if (clean === zone || clean.endsWith(`.${zone}`)) return clean;
+  return `${clean}.${zone}`;
+}
+
+function parsePipeArgs(input) {
+  return String(input)
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+async function getCloudflareZoneId(zone) {
+  if (CLOUDFLARE_ZONE_ID) return CLOUDFLARE_ZONE_ID;
+
+  const query = new URLSearchParams({ name: zone });
+  const data = await cloudflareRequest(`/zones?${query.toString()}`);
+  const found = Array.isArray(data.result) ? data.result[0] : null;
+  if (!found?.id) {
+    throw new Error(
+      "Cloudflare zone was not found. Add CLOUDFLARE_ZONE_ID to Railway variables."
+    );
+  }
+
+  return found.id;
+}
+
+async function cloudflareRequest(path, method = "GET", body = null) {
+  const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.success === false) {
+    const message = data.errors?.[0]?.message || data.message || `Cloudflare returned ${response.status}`;
+    throw new Error(message);
+  }
+
+  return data;
 }
 
 async function saveNote(action) {
@@ -1195,6 +1484,8 @@ function helpText() {
     "/tool dns bysymbat.com - check DNS records",
     "/tool website https://bysymbat.com - check a website",
     "/tool github owner/repo - check a GitHub repo",
+    "/actions - show approved write-action tools",
+    "/act action input - queue GitHub, Cloudflare, or Railway changes",
     "/do action task - execute a safe built-in action after approval",
     "/connectors - show allowed external servers",
     "/run connector_name task - request work through a connector",
@@ -1230,7 +1521,38 @@ function toolsText() {
     "проверь сайт https://bysymbat.com",
     "проверь github koldeybekova-tech/portfolio-website",
     "",
-    "These tools only read public information. Changing GitHub, Cloudflare, or Railway will be added later through approved connectors.",
+    "These tools only read public information. To change GitHub, Cloudflare, or Railway, use /actions.",
+  ].join("\n");
+}
+
+function actionsText() {
+  return [
+    "Approved write-action tools:",
+    "",
+    "/act github-issue owner/repo | title | body",
+    "Creates a GitHub issue after /approve.",
+    "",
+    "/act cloudflare-cname zone.com | name | target | proxied",
+    "Creates or updates a Cloudflare CNAME record after /approve.",
+    "",
+    "/act cloudflare-a zone.com | name | ip | proxied",
+    "Creates or updates a Cloudflare A record after /approve.",
+    "",
+    "/act railway-deploy reason",
+    "Triggers a Railway deploy hook after /approve.",
+    "",
+    "Examples:",
+    "/act github-issue koldeybekova-tech/portfolio-website | Domain setup | Connect bysymbat.com through Cloudflare",
+    "/act cloudflare-cname bysymbat.com | www | portfolio-production.up.railway.app | false",
+    "/act cloudflare-a bysymbat.com | @ | 76.76.21.21 | false",
+    "/act railway-deploy redeploy bot after config change",
+    "",
+    "Every action first returns an action id. It only runs after /approve ACTION_ID.",
+    "",
+    "Required Railway variables:",
+    "GITHUB_TOKEN for GitHub issues",
+    "CLOUDFLARE_API_TOKEN and optionally CLOUDFLARE_ZONE_ID for DNS",
+    "RAILWAY_DEPLOY_HOOK_URL for redeploys",
   ].join("\n");
 }
 

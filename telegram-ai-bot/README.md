@@ -5,6 +5,7 @@ A simple Telegram bot that replies with Groq.
 It also includes a safe task/connector layer:
 
 - `/tool` runs safe read-only tools.
+- `/act` queues GitHub, Cloudflare, and Railway write tools.
 - `/task` creates a plan, but does not execute anything.
 - `/do` executes safe built-in actions after approval.
 - `/remember` saves important facts for the current chat.
@@ -13,7 +14,7 @@ It also includes a safe task/connector layer:
 - Auto-memory saves obvious project facts from normal messages.
 - `/todo`, `/todos`, `/done`, `/undone`, and `/delete` manage chat tasks.
 - `/run connector_name task` queues work for an allowed external server.
-- `/approve action_id` is required before the bot calls that server.
+- `/approve action_id` is required before the bot calls an external server or changes an external account.
 - connectors must be explicitly allowlisted in `.env`.
 
 ## Setup
@@ -64,6 +65,17 @@ CONNECTORS_JSON=[]
 ```
 
 Do not upload `.env` to GitHub. It is ignored by `.gitignore`.
+
+Optional write-action variables:
+
+```env
+GITHUB_TOKEN=...
+CLOUDFLARE_API_TOKEN=...
+CLOUDFLARE_ZONE_ID=...
+RAILWAY_DEPLOY_HOOK_URL=...
+```
+
+Add these in Railway Variables only when you need the matching tool. The bot will still require `/approve ACTION_ID` before using them.
 
 ## Group Chat
 
@@ -124,6 +136,11 @@ Natural execution phrases such as `переведи`, `сделай чеклис
 /tool dns bysymbat.com
 /tool website https://bysymbat.com
 /tool github koldeybekova-tech/portfolio-website
+/actions
+/act github-issue koldeybekova-tech/portfolio-website | Title | Body
+/act cloudflare-cname bysymbat.com | www | target.example.com | false
+/act cloudflare-a bysymbat.com | @ | 76.76.21.21 | false
+/act railway-deploy redeploy bot
 /do draft write a polite reply
 /do summarize pasted long text
 /do translate translate this to English
@@ -158,6 +175,39 @@ Natural language examples:
 проверь сайт https://bysymbat.com
 проверь github koldeybekova-tech/portfolio-website
 ```
+
+## Approved Write Tools
+
+These tools can change external accounts, so they always create a pending action first. Nothing is changed until an allowed user approves:
+
+```text
+/approve ACTION_ID
+```
+
+Available tools:
+
+- `github-issue` - creates a GitHub issue in a repo
+- `cloudflare-cname` - creates or updates a Cloudflare CNAME record
+- `cloudflare-a` - creates or updates a Cloudflare A record
+- `railway-deploy` - triggers a Railway deploy hook
+
+Examples:
+
+```text
+/act github-issue koldeybekova-tech/portfolio-website | Domain setup | Connect bysymbat.com through Cloudflare
+/act cloudflare-cname bysymbat.com | www | portfolio-production.up.railway.app | false
+/act cloudflare-a bysymbat.com | @ | 76.76.21.21 | false
+/act railway-deploy redeploy after changing variables
+```
+
+Required variables:
+
+- `GITHUB_TOKEN` with access to create issues in the selected repo
+- `CLOUDFLARE_API_TOKEN` with DNS edit access
+- `CLOUDFLARE_ZONE_ID`, optional but recommended for the domain zone
+- `RAILWAY_DEPLOY_HOOK_URL`, created in Railway service settings
+
+Never send these secrets in normal chat messages. Put them in Railway Variables.
 
 ## Built-in Execution
 
