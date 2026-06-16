@@ -95,6 +95,8 @@ async function handleMessage(message) {
     text.startsWith("/undone") ||
     text.startsWith("/delete") ||
     text.startsWith("/task") ||
+    text.startsWith("/tools") ||
+    text.startsWith("/tool") ||
     text.startsWith("/do") ||
     text.startsWith("/connectors") ||
     text.startsWith("/run") ||
@@ -184,6 +186,16 @@ async function handleMessage(message) {
     return;
   }
 
+  if (text.startsWith("/tools")) {
+    await sendMessage(chatId, toolsText());
+    return;
+  }
+
+  if (text.startsWith("/tool")) {
+    await toolCommand(message, text);
+    return;
+  }
+
   const routed = !command
     ? routeNaturalMessage(text, { isPrivate, mentioned, addressedByName })
     : null;
@@ -205,6 +217,11 @@ async function handleMessage(message) {
 
   if (routed?.type === "deleteTask") {
     await deleteTaskById(message, routed.id);
+    return;
+  }
+
+  if (routed?.type === "tool") {
+    await runToolFromParts(message, routed.toolName, routed.input);
     return;
   }
 
@@ -408,6 +425,50 @@ async function queueBuiltinAction(message, text) {
 
 async function queueBuiltinActionFromParts(message, actionName, task) {
   await queueBuiltinAction(message, `/do ${actionName} ${task}`);
+}
+
+async function toolCommand(message, text) {
+  const chatId = message.chat.id;
+  const match = text.match(/^\/tool(?:@\w+)?\s+([a-zA-Z0-9_-]+)\s*([\s\S]*)/);
+
+  if (!match) {
+    await sendMessage(chatId, toolsText());
+    return;
+  }
+
+  const [, toolName, input] = match;
+  await runToolFromParts(message, toolName, input.trim());
+}
+
+async function runToolFromParts(message, toolName, input) {
+  const chatId = message.chat.id;
+  const normalizedTool = String(toolName).toLowerCase();
+
+  if (!input) {
+    await sendMessage(chatId, `Write input after /tool ${normalizedTool}.\n\n${toolsText()}`);
+    return;
+  }
+
+  await sendChatAction(chatId, "typing");
+
+  try {
+    let result = "";
+
+    if (normalizedTool === "dns" || normalizedTool === "domain") {
+      result = await checkDnsTool(input);
+    } else if (normalizedTool === "website" || normalizedTool === "site") {
+      result = await checkWebsiteTool(input);
+    } else if (normalizedTool === "github" || normalizedTool === "repo") {
+      result = await checkGitHubTool(input);
+    } else {
+      await sendMessage(chatId, toolsText());
+      return;
+    }
+
+    await sendMessage(chatId, result);
+  } catch (error) {
+    await sendMessage(chatId, `Tool ${normalizedTool} failed: ${error.message}`);
+  }
 }
 
 async function approveAction(message, text) {
@@ -815,6 +876,142 @@ async function deleteTaskById(message, id) {
   await sendMessage(chatId, `Deleted task ${id}.`);
 }
 
+async function checkDnsTool(input) {
+  const domain = normalizeDomain(input);
+  const [a, cname, ns] = await Promise.all([
+    resolveDns(domain, "A"),
+    resolveDns(domain, "CNAME"),
+    resolveDns(domain, "NS"),
+  ]);
+
+  return [
+    `DNS check for ${domain}:`,
+    "",
+    formatDnsAnswer("A", a),
+    formatDnsAnswer("CNAME", cname),
+    formatDnsAnswer("NS", ns),
+  ].join("\n");
+}
+
+async function checkWebsiteTool(input) {
+  const url = normalizeUrl(input);
+  const startedAt = Date.now();
+  const response = await fetch(url, {
+    method: "GET",
+    redirect: "follow",
+    signal: AbortSignal.timeout(12000),
+    headers: {
+      "User-Agent": `${BOT_NAME.replace(/\s+/g, "-")}/1.0`,
+    },
+  });
+  const elapsed = Date.now() - startedAt;
+  const contentType = response.headers.get("content-type") || "unknown";
+  const body = contentType.includes("text/html") ? await response.text() : "";
+  const title = body.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, " ").trim();
+
+  return [
+    `Website check: ${url}`,
+    `Status: ${response.status} ${response.statusText}`,
+    `Final URL: ${response.url}`,
+    `Content-Type: ${contentType}`,
+    `Response time: ${elapsed}ms`,
+    title ? `Title: ${title}` : "Title: not found",
+  ].join("\n");
+}
+
+async function checkGitHubTool(input) {
+  const repo = parseGitHubRepo(input);
+  const repoResponse = await fetch(`https://api.github.com/repos/${repo}`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      "User-Agent": `${BOT_NAME.replace(/\s+/g, "-")}/1.0`,
+    },
+    signal: AbortSignal.timeout(12000),
+  });
+
+  if (!repoResponse.ok) {
+    throw new Error(`GitHub returned ${repoResponse.status}. If this repo is private, add a safe connector or GitHub token later.`);
+  }
+
+  const repoData = await repoResponse.json();
+  const commitResponse = await fetch(
+    `https://api.github.com/repos/${repo}/commits?per_page=1&sha=${encodeURIComponent(repoData.default_branch)}`,
+    {
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": `${BOT_NAME.replace(/\s+/g, "-")}/1.0`,
+      },
+      signal: AbortSignal.timeout(12000),
+    }
+  );
+  const commits = commitResponse.ok ? await commitResponse.json() : [];
+  const latest = Array.isArray(commits) ? commits[0] : null;
+
+  return [
+    `GitHub repo check: ${repoData.full_name}`,
+    `Visibility: ${repoData.private ? "private" : "public"}`,
+    `Default branch: ${repoData.default_branch}`,
+    `Open issues: ${repoData.open_issues_count}`,
+    `Last push: ${repoData.pushed_at || "unknown"}`,
+    latest?.sha ? `Latest commit: ${latest.sha.slice(0, 7)} - ${latest.commit?.message?.split("\n")[0] || "no message"}` : "Latest commit: not available",
+  ].join("\n");
+}
+
+async function resolveDns(domain, type) {
+  const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${encodeURIComponent(type)}`;
+  const response = await fetch(url, {
+    headers: { Accept: "application/dns-json" },
+    signal: AbortSignal.timeout(12000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`DNS resolver returned ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function formatDnsAnswer(label, data) {
+  const answers = Array.isArray(data.Answer) ? data.Answer : [];
+  if (!answers.length) return `${label}: no records found`;
+  return `${label}:\n${answers.map((item) => `- ${item.data}`).join("\n")}`;
+}
+
+function normalizeDomain(input) {
+  const raw = String(input).trim();
+  try {
+    const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    return url.hostname.replace(/^www\./, "");
+  } catch {
+    const domain = raw.replace(/^https?:\/\//i, "").split("/")[0].replace(/^www\./, "");
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
+      throw new Error("Please provide a valid domain, for example bysymbat.com");
+    }
+    return domain;
+  }
+}
+
+function normalizeUrl(input) {
+  const raw = String(input).trim();
+  const url = raw.includes("://") ? raw : `https://${raw}`;
+  try {
+    return new URL(url).toString();
+  } catch {
+    throw new Error("Please provide a valid URL, for example https://bysymbat.com");
+  }
+}
+
+function parseGitHubRepo(input) {
+  const clean = String(input).trim();
+  const githubMatch = clean.match(/github\.com\/([^/\s]+)\/([^/\s#?]+)/i);
+  const slashMatch = clean.match(/^([^/\s]+)\/([^/\s#?]+)$/);
+  const match = githubMatch || slashMatch;
+  if (!match) {
+    throw new Error("Please provide a GitHub repo like koldeybekova-tech/portfolio-website");
+  }
+  return `${match[1]}/${match[2].replace(/\.git$/i, "")}`;
+}
+
 function routeNaturalMessage(text, options = {}) {
   if (!options.isPrivate && !options.mentioned && !options.addressedByName) {
     return null;
@@ -862,6 +1059,26 @@ function routeNaturalMessage(text, options = {}) {
     lower.includes("my tasks")
   ) {
     return { type: "todos" };
+  }
+
+  const toolRoutes = [
+    {
+      toolName: "dns",
+      prefixes: ["проверь домен ", "проверь dns ", "check domain ", "check dns "],
+    },
+    {
+      toolName: "website",
+      prefixes: ["проверь сайт ", "проверь url ", "check website ", "check site ", "check url "],
+    },
+    {
+      toolName: "github",
+      prefixes: ["проверь github ", "проверь репозиторий ", "check github ", "check repo "],
+    },
+  ];
+
+  for (const route of toolRoutes) {
+    const input = prefixed(clean, lower, route.prefixes);
+    if (input) return { type: "tool", toolName: route.toolName, input };
   }
 
   const builtins = [
@@ -974,6 +1191,10 @@ function helpText() {
     "/undone task_id - reopen task",
     "/delete task_id - delete task",
     "/task task - get a safe task plan",
+    "/tools - show built-in read-only tools",
+    "/tool dns bysymbat.com - check DNS records",
+    "/tool website https://bysymbat.com - check a website",
+    "/tool github owner/repo - check a GitHub repo",
     "/do action task - execute a safe built-in action after approval",
     "/connectors - show allowed external servers",
     "/run connector_name task - request work through a connector",
@@ -986,10 +1207,30 @@ function helpText() {
     "добавь задачу проверить DNS",
     "покажи задачи",
     "удали задачу TASK_ID",
+    "проверь домен bysymbat.com",
+    "проверь сайт https://bysymbat.com",
+    "проверь github koldeybekova-tech/portfolio-website",
     "переведи на английский: сайт готов",
     "",
     "In private chats, normal messages are questions.",
     "In group chats, tag me, say 'бот,' first, or use /ask, /task, or /run.",
+  ].join("\n");
+}
+
+function toolsText() {
+  return [
+    "Built-in read-only tools:",
+    "",
+    "/tool dns bysymbat.com - check A, CNAME, and NS records",
+    "/tool website https://bysymbat.com - check HTTP status, final URL, and title",
+    "/tool github koldeybekova-tech/portfolio-website - check repo status and latest commit",
+    "",
+    "Natural phrases:",
+    "проверь домен bysymbat.com",
+    "проверь сайт https://bysymbat.com",
+    "проверь github koldeybekova-tech/portfolio-website",
+    "",
+    "These tools only read public information. Changing GitHub, Cloudflare, or Railway will be added later through approved connectors.",
   ].join("\n");
 }
 

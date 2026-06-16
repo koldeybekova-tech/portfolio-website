@@ -4,6 +4,7 @@ A simple Telegram bot that replies with Groq.
 
 It also includes a safe task/connector layer:
 
+- `/tool` runs safe read-only tools.
 - `/task` creates a plan, but does not execute anything.
 - `/do` executes safe built-in actions after approval.
 - `/remember` saves important facts for the current chat.
@@ -93,6 +94,9 @@ Examples:
 добавь задачу проверить DNS
 покажи задачи
 удали задачу TASK_ID
+проверь домен bysymbat.com
+проверь сайт https://bysymbat.com
+проверь github koldeybekova-tech/portfolio-website
 переведи на английский: сайт готов
 сделай чеклист запуск портфолио
 какие идеи для портфолио?
@@ -116,6 +120,10 @@ Natural execution phrases such as `переведи`, `сделай чеклис
 /undone TASK_ID
 /delete TASK_ID
 /task plan this work safely
+/tools
+/tool dns bysymbat.com
+/tool website https://bysymbat.com
+/tool github koldeybekova-tech/portfolio-website
 /do draft write a polite reply
 /do summarize pasted long text
 /do translate translate this to English
@@ -125,6 +133,30 @@ Natural execution phrases such as `переведи`, `сделай чеклис
 /run connector_name do this task
 /approve ACTION_ID
 /reject ACTION_ID
+```
+
+## Built-in Tools
+
+These tools only read public information and do not change external accounts:
+
+- `dns` - checks public DNS records through DNS-over-HTTPS
+- `website` - checks HTTP status, final URL, response time, and page title
+- `github` - checks a public GitHub repo and latest commit
+
+Useful examples:
+
+```text
+/tool dns bysymbat.com
+/tool website https://bysymbat.com
+/tool github koldeybekova-tech/portfolio-website
+```
+
+Natural language examples:
+
+```text
+проверь домен bysymbat.com
+проверь сайт https://bysymbat.com
+проверь github koldeybekova-tech/portfolio-website
 ```
 
 ## Built-in Execution
